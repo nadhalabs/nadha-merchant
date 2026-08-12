@@ -1,0 +1,1 @@
+import React from'react';import{createRoot}from'react-dom/client';import'./styles.css';import'./phase2.css';import'./touch.css';import'./phase3.css';import{App}from'./App';createRoot(document.getElementById('root')!).render(<React.StrictMode><App/></React.StrictMode>)
