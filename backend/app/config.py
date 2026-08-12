@@ -6,7 +6,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./nadha.db"
     secret_key: str = "development-only-change-me"
     access_token_minutes: int = 10080
-    cors_origins: str = "http://localhost:5173,capacitor://localhost,http://localhost"
+    cors_origins: str = "http://localhost:5173,capacitor://localhost,http://localhost,https://localhost"
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     @property
@@ -20,4 +20,3 @@ def get_settings() -> Settings:
 
 
 settings = get_settings()
-
