@@ -10,7 +10,7 @@ def rebuild_ledger(db: Session, tx: Transaction) -> None:
     if tx.type == TransactionType.sale and tx.customer_id:
         paid = tx.paid_amount or ZERO
         if tx.payment_method == PaymentMethod.credit: paid = ZERO
-        elif tx.payment_method == PaymentMethod.mixed: paid = (tx.cash_amount or ZERO) + (tx.upi_amount or ZERO)
+        elif tx.payment_method == PaymentMethod.mixed: paid = (tx.cash_amount or ZERO) + (tx.upi_amount or ZERO)+(tx.bank_amount or ZERO)+(tx.other_amount or ZERO)
         due = tx.amount - paid
         if due > 0: entry = LedgerEntry(shop_id=tx.shop_id, customer_id=tx.customer_id, transaction_id=tx.id, kind=LedgerKind.customer_credit, amount=due, occurred_at=tx.occurred_at, note=tx.note)
     if tx.type == TransactionType.purchase and tx.supplier_id:

@@ -1,7 +1,11 @@
 from datetime import datetime, timezone
+import uuid
 
 def tx(client, headers, shop, **values):
     body = {'type':'sale','amount':'100.00','payment_method':'cash','occurred_at':datetime.now(timezone.utc).isoformat(), **values}
+    body['idempotency_key']=str(uuid.uuid4())
+    if body['type']!='expense':
+        p=client.post(f"/api/shops/{shop['id']}/products",headers=headers,json={'name':f'Item {uuid.uuid4()}','unit':'piece','active':True,'inventory_enabled':False}).json();body['items']=[{'product_id':p['id'],'quantity':'1','unit_price':body['amount']}]
     return client.post(f"/api/shops/{shop['id']}/transactions", headers=headers, json=body)
 
 def person(client, headers, shop, kind, name):
@@ -13,7 +17,7 @@ def test_auth_and_tenant_isolation(client, owner):
     token = client.post('/api/auth/register', json={'email':'other@example.com','password':'password1','name':'Other'}).json()['access_token']
     other = {'Authorization': f'Bearer {token}'}
     assert client.get(f"/api/shops/{shop['id']}", headers=other).status_code == 404
-    assert tx(client, other, shop).status_code == 404
+    assert client.post(f"/api/shops/{shop['id']}/transactions",headers=other,json={'type':'sale','amount':'100','payment_method':'cash','occurred_at':datetime.now(timezone.utc).isoformat(),'idempotency_key':str(uuid.uuid4()),'items':[{'product_id':str(uuid.uuid4()),'quantity':'1','unit_price':'100'}]}).status_code==404
 
 def test_all_transaction_types_and_edit(client, owner):
     headers, shop = owner

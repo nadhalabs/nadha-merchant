@@ -34,7 +34,7 @@ class Shop(Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(160)); phone: Mapped[str | None] = mapped_column(String(30))
     business_type: Mapped[str | None] = mapped_column(String(80)); timezone: Mapped[str] = mapped_column(String(60), default="Asia/Kolkata")
-    currency: Mapped[str] = mapped_column(String(3), default="INR"); created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+    currency: Mapped[str] = mapped_column(String(3), default="INR"); ai_enabled:Mapped[bool]=mapped_column(Boolean,default=False); created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class ShopMember(Base):
@@ -61,11 +61,11 @@ class Supplier(Base):
 
 class Transaction(Base):
     __tablename__ = "transactions"
-    __table_args__=(Index("ix_transactions_shop_type_occurred","shop_id","type","occurred_at"),)
+    __table_args__=(Index("ix_transactions_shop_type_occurred","shop_id","type","occurred_at"),UniqueConstraint("shop_id","idempotency_key",name="uq_transaction_shop_idempotency"))
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4); shop_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("shops.id", ondelete="CASCADE"), index=True)
     type: Mapped[TransactionType] = mapped_column(Enum(TransactionType)); amount: Mapped[Decimal] = mapped_column(Numeric(14, 2))
     payment_state: Mapped[PaymentState | None] = mapped_column(Enum(PaymentState)); payment_method: Mapped[PaymentMethod | None] = mapped_column(Enum(PaymentMethod))
-    paid_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2)); cash_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2)); upi_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    paid_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2)); cash_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2)); upi_amount: Mapped[Decimal | None] = mapped_column(Numeric(14, 2)); bank_amount: Mapped[Decimal | None] = mapped_column(Numeric(14,2)); other_amount: Mapped[Decimal | None] = mapped_column(Numeric(14,2)); idempotency_key: Mapped[str | None]=mapped_column(String(100),index=True)
     category: Mapped[str | None] = mapped_column(String(80)); customer_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("customers.id", ondelete="RESTRICT"), index=True)
     supplier_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("suppliers.id", ondelete="RESTRICT"), index=True); note: Mapped[str | None] = mapped_column(Text)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True); created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow); updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
@@ -73,19 +73,20 @@ class Transaction(Base):
 
 class LedgerEntry(Base):
     __tablename__ = "ledger_entries"
-    __table_args__=(Index("ix_ledger_shop_customer_date","shop_id","customer_id","occurred_at"),Index("ix_ledger_shop_supplier_date","shop_id","supplier_id","occurred_at"))
+    __table_args__=(Index("ix_ledger_shop_customer_date","shop_id","customer_id","occurred_at"),Index("ix_ledger_shop_supplier_date","shop_id","supplier_id","occurred_at"),UniqueConstraint("shop_id","kind","idempotency_key",name="uq_ledger_shop_operation_idempotency"))
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4); shop_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("shops.id", ondelete="CASCADE"), index=True)
     customer_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("customers.id", ondelete="RESTRICT"), index=True); supplier_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("suppliers.id", ondelete="RESTRICT"), index=True)
     transaction_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("transactions.id", ondelete="CASCADE"), index=True)
     kind: Mapped[LedgerKind] = mapped_column(Enum(LedgerKind)); amount: Mapped[Decimal] = mapped_column(Numeric(14, 2)); note: Mapped[str | None] = mapped_column(Text)
+    payment_method: Mapped[PaymentMethod | None] = mapped_column(Enum(PaymentMethod)); idempotency_key: Mapped[str | None] = mapped_column(String(100), index=True)
     occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True); created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
 
 
 class DayClosing(Base):
-    __tablename__ = "day_closings"
+    __tablename__ = "day_closings"; __table_args__=(UniqueConstraint("shop_id","date",name="uq_day_closing_shop_date"),UniqueConstraint("shop_id","idempotency_key",name="uq_closing_shop_idempotency"))
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4); shop_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("shops.id", ondelete="CASCADE"), index=True)
     date: Mapped[date] = mapped_column(Date, index=True); expected_cash: Mapped[Decimal] = mapped_column(Numeric(14,2)); actual_cash: Mapped[Decimal] = mapped_column(Numeric(14,2)); difference: Mapped[Decimal] = mapped_column(Numeric(14,2)); upi_total: Mapped[Decimal] = mapped_column(Numeric(14,2)); notes: Mapped[str | None] = mapped_column(Text)
-    snapshot: Mapped[str] = mapped_column(Text, default="{}"); created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow); updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
+    snapshot: Mapped[str] = mapped_column(Text, default="{}"); idempotency_key: Mapped[str|None]=mapped_column(String(100)); created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow); updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, onupdate=utcnow)
 
 class ProductCategory(Base):
     __tablename__="product_categories"; __table_args__=(UniqueConstraint("shop_id","name",name="uq_product_category_shop_name"),)
@@ -102,15 +103,23 @@ class Product(Base):
 
 class TransactionItem(Base):
     __tablename__="transaction_items"
-    id: Mapped[uuid.UUID]=mapped_column(primary_key=True,default=uuid.uuid4); transaction_id: Mapped[uuid.UUID]=mapped_column(ForeignKey("transactions.id",ondelete="CASCADE"),index=True); product_id: Mapped[uuid.UUID]=mapped_column(ForeignKey("products.id",ondelete="RESTRICT"),index=True)
+    id: Mapped[uuid.UUID]=mapped_column(primary_key=True,default=uuid.uuid4); transaction_id: Mapped[uuid.UUID]=mapped_column(ForeignKey("transactions.id",ondelete="CASCADE"),index=True); product_id: Mapped[uuid.UUID|None]=mapped_column(ForeignKey("products.id",ondelete="RESTRICT"),index=True)
     product_name_snapshot: Mapped[str]=mapped_column(String(160),default=""); supplier_name_snapshot: Mapped[str|None]=mapped_column(String(160)); quantity: Mapped[Decimal]=mapped_column(Numeric(14,3)); unit_price: Mapped[Decimal]=mapped_column(Numeric(14,2)); cost_price: Mapped[Decimal|None]=mapped_column(Numeric(14,2)); line_total: Mapped[Decimal]=mapped_column(Numeric(14,2))
     created_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),default=utcnow); updated_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),default=utcnow,onupdate=utcnow)
 
+class DiaryEvent(Base):
+    __tablename__="diary_events";__table_args__=(Index("ix_diary_shop_occurred","shop_id","occurred_at"),UniqueConstraint("shop_id","event_code","related_entity_id",name="uq_diary_business_event"))
+    id:Mapped[uuid.UUID]=mapped_column(primary_key=True,default=uuid.uuid4);shop_id:Mapped[uuid.UUID]=mapped_column(ForeignKey("shops.id",ondelete="CASCADE"),index=True);actor_id:Mapped[uuid.UUID|None]=mapped_column(ForeignKey("users.id",ondelete="SET NULL"));event_code:Mapped[str]=mapped_column(String(80),index=True);related_entity_type:Mapped[str]=mapped_column(String(80));related_entity_id:Mapped[uuid.UUID]=mapped_column(index=True);amount:Mapped[Decimal|None]=mapped_column(Numeric(14,2));payment_method:Mapped[PaymentMethod|None]=mapped_column(Enum(PaymentMethod));metadata_json:Mapped[str]=mapped_column(Text,default="{}");search_text:Mapped[str]=mapped_column(Text,default="");occurred_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),index=True);created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=utcnow)
+
+class AIUsage(Base):
+    __tablename__="ai_usage"
+    id:Mapped[uuid.UUID]=mapped_column(primary_key=True,default=uuid.uuid4);shop_id:Mapped[uuid.UUID]=mapped_column(ForeignKey("shops.id",ondelete="CASCADE"),index=True);provider:Mapped[str]=mapped_column(String(80));model:Mapped[str|None]=mapped_column(String(120));success:Mapped[bool]=mapped_column(Boolean);input_units:Mapped[int|None];output_units:Mapped[int|None];created_at:Mapped[datetime]=mapped_column(DateTime(timezone=True),default=utcnow,index=True)
+
 class InventoryMovement(Base):
     __tablename__="inventory_movements"
-    __table_args__=(Index("ix_inventory_shop_product_date","shop_id","product_id","occurred_at"),)
+    __table_args__=(Index("ix_inventory_shop_product_date","shop_id","product_id","occurred_at"),UniqueConstraint("shop_id","idempotency_key",name="uq_inventory_shop_idempotency"))
     id: Mapped[uuid.UUID]=mapped_column(primary_key=True,default=uuid.uuid4); shop_id: Mapped[uuid.UUID]=mapped_column(ForeignKey("shops.id",ondelete="CASCADE"),index=True); product_id: Mapped[uuid.UUID]=mapped_column(ForeignKey("products.id",ondelete="RESTRICT"),index=True)
-    transaction_item_id: Mapped[uuid.UUID|None]=mapped_column(ForeignKey("transaction_items.id",ondelete="CASCADE"),unique=True,index=True); type: Mapped[InventoryMovementType]=mapped_column(Enum(InventoryMovementType)); quantity_delta: Mapped[Decimal]=mapped_column(Numeric(14,3)); reason: Mapped[str]=mapped_column(Text); occurred_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),index=True); created_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),default=utcnow)
+    transaction_item_id: Mapped[uuid.UUID|None]=mapped_column(ForeignKey("transaction_items.id",ondelete="CASCADE"),unique=True,index=True); type: Mapped[InventoryMovementType]=mapped_column(Enum(InventoryMovementType)); quantity_delta: Mapped[Decimal]=mapped_column(Numeric(14,3)); reason: Mapped[str]=mapped_column(Text); idempotency_key:Mapped[str|None]=mapped_column(String(100)); occurred_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),index=True); created_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),default=utcnow)
 
 class LostSale(Base):
     __tablename__="lost_sales";__table_args__=(Index("ix_lost_sales_shop_requested_date","shop_id","requested_product","occurred_at"),)

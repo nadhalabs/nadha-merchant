@@ -51,6 +51,7 @@ def items(transaction_id:uuid.UUID,shop_id=Depends(shop_access),db:Session=Depen
 def attach(transaction_id:uuid.UUID,body:list[ItemIn],shop_id=Depends(shop_access),db:Session=Depends(get_db)):
     tx=db.scalar(select(Transaction).where(Transaction.id==transaction_id,Transaction.shop_id==shop_id))
     if not tx:raise HTTPException(404,"Transaction not found")
+    if tx.idempotency_key:raise HTTPException(409,"Items for finalized financial entries cannot be changed separately")
     try:rows=replace_items(db,shop_id,tx,body);db.commit()
     except ValueError as e:db.rollback();raise HTTPException(400,str(e))
     total=sum((x.line_total for x in rows),0);return {"transaction_amount":tx.amount,"itemized_total":total,"difference":tx.amount-total,"complete":total==tx.amount,"items":[ItemOut.model_validate(x) for x in rows]}

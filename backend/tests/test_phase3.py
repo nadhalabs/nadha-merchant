@@ -1,7 +1,11 @@
 from datetime import date,datetime,timezone
+import uuid
 NOW=lambda:datetime.now(timezone.utc).isoformat()
 def tx(c,h,s,**extra):
     body={'type':'sale','amount':'100','payment_method':'cash','occurred_at':NOW(),**extra}
+    body['idempotency_key']=str(uuid.uuid4())
+    if body['type']!='expense':
+        p=c.post(f"/api/shops/{s['id']}/products",headers=h,json={'name':f'Item {uuid.uuid4()}','unit':'piece','active':True,'inventory_enabled':False}).json();body['items']=[{'product_id':p['id'],'quantity':'1','unit_price':body['amount']}]
     return c.post(f"/api/shops/{s['id']}/transactions",headers=h,json=body)
 def customer(c,h,s,name='Ravi'):return c.post(f"/api/shops/{s['id']}/customers",headers=h,json={'name':name}).json()
 def supplier(c,h,s,name='ABC Distributor'):return c.post(f"/api/shops/{s['id']}/suppliers",headers=h,json={'name':name,'payment_terms':'30 days'}).json()
@@ -9,7 +13,7 @@ def product(c,h,s,name='Oil'):return c.post(f"/api/shops/{s['id']}/products",hea
 
 def test_missing_money_exact_shortage_excess_and_recalculation(client,owner):
     h,s=owner;today=date.today().isoformat();tx(client,h,s,amount='500')
-    closing=client.post(f"/api/shops/{s['id']}/closings",headers=h,json={'date':today,'actual_cash':'500'}).json()
+    closing=client.post(f"/api/shops/{s['id']}/closings",headers=h,json={'date':today,'actual_cash':'500','idempotency_key':str(uuid.uuid4())}).json()
     review=lambda:client.get(f"/api/shops/{s['id']}/cash-review?period=today",headers=h).json()['dates'][0]
     assert review()['difference']==0
     client.put(f"/api/shops/{s['id']}/closings/{closing['id']}",headers=h,json={'date':today,'actual_cash':'450'});assert review()['difference']==-50
@@ -26,7 +30,7 @@ def test_credit_sale_excluded_health_and_collect_today(client,owner):
 def test_supplier_price_memory_renames_and_footprint(client,owner):
     h,s=owner;sup=supplier(client,h,s);p=product(client,h,s);url=f"/api/shops/{s['id']}/transactions"
     for price in ('1180','1260'):
-        purchase=tx(client,h,s,type='purchase',amount=price,payment_method='cash',payment_state='paid',paid_amount=price,supplier_id=sup['id']).json();client.put(f"{url}/{purchase['id']}/items",headers=h,json=[{'product_id':p['id'],'quantity':'1','unit_price':price,'cost_price':price}])
+        client.post(url,headers=h,json={'type':'purchase','amount':price,'payment_method':'cash','payment_state':'paid','paid_amount':price,'supplier_id':sup['id'],'occurred_at':NOW(),'idempotency_key':str(uuid.uuid4()),'items':[{'product_id':p['id'],'quantity':'1','unit_price':price,'cost_price':price}]})
     history=client.get(f"/api/shops/{s['id']}/products/{p['id']}/supplier-prices",headers=h).json();assert [x['unit_price'] for x in history]==[1180,1260] and history[0]['supplier_name_snapshot']=='ABC Distributor'
     changed={k:v for k,v in p.items() if k not in ('id','shop_id','created_at','updated_at')};changed['name']='Sunflower Oil';client.put(f"/api/shops/{s['id']}/products/{p['id']}",headers=h,json=changed)
     client.put(f"/api/shops/{s['id']}/suppliers/{sup['id']}",headers=h,json={'name':'ABC Wholesale','payment_terms':'30 days'});footprint=client.get(f"/api/shops/{s['id']}/suppliers/{sup['id']}/footprint",headers=h).json();assert footprint['products'][0]['previous_price']==1180 and footprint['products'][0]['change']==80 and footprint['supplier']['name']=='ABC Wholesale' and footprint['products'][0]['prices'][0]['supplier_name_snapshot']=='ABC Distributor'

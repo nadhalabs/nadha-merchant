@@ -4,7 +4,7 @@ from decimal import Decimal
 from fastapi import APIRouter,Depends,HTTPException
 from sqlalchemy import func,select
 from sqlalchemy.orm import Session
-from ..closings.service import daily_totals,total_owed
+from ..closings.service import daily_totals,total_owed,day_bounds
 from ..dependencies import get_db,shop_access
 from ..models import InventoryMovement,LedgerEntry,LedgerKind,Product,Transaction,TransactionItem,TransactionType
 router=APIRouter(prefix="/shops/{shop_id}",tags=["profit","money-map"]);Z=Decimal("0")
@@ -20,9 +20,11 @@ def profit_data(db,shop_id,start=None,end=None,transaction_id=None):
     return {"label":"Gross Profit" if sales>0 and coverage==100 else "Estimated Profit","profit":profit,"gross_margin_percent":margin,"sales":sales,"sales_value_with_cost_data":covered,"coverage_percent":coverage,"is_exact":sales>0 and coverage==100}
 @router.get("/profit")
 def profit(period:str="daily",day:date|None=None,shop_id=Depends(shop_access),db:Session=Depends(get_db)):
-    d=day or date.today()
-    if period=="monthly":start=datetime(d.year,d.month,1,tzinfo=timezone.utc);end=datetime(d.year+(d.month==12),(d.month%12)+1,1,tzinfo=timezone.utc)
-    else:start=datetime.combine(d,time.min,tzinfo=timezone.utc);end=datetime.combine(d,time.max,tzinfo=timezone.utc)
+    from zoneinfo import ZoneInfo
+    from ..models import Shop
+    d=day or datetime.now(ZoneInfo(db.get(Shop,shop_id).timezone)).date()
+    if period=="monthly":start,_=day_bounds(db,shop_id,d.replace(day=1));next_month=date(d.year+(d.month==12),(d.month%12)+1,1);end,_=day_bounds(db,shop_id,next_month)
+    else:start,end=day_bounds(db,shop_id,d)
     return profit_data(db,shop_id,start,end)
 @router.get("/transactions/{transaction_id}/profit")
 def transaction_profit(transaction_id:uuid.UUID,shop_id=Depends(shop_access),db:Session=Depends(get_db)):
@@ -30,7 +32,9 @@ def transaction_profit(transaction_id:uuid.UUID,shop_id=Depends(shop_access),db:
     return profit_data(db,shop_id,transaction_id=transaction_id)
 @router.get("/money-map")
 def money_map(day:date|None=None,shop_id=Depends(shop_access),db:Session=Depends(get_db)):
-    d=day or date.today();daily=daily_totals(db,shop_id,d);profit=profit_data(db,shop_id,datetime.combine(d,time.min,tzinfo=timezone.utc),datetime.combine(d,time.max,tzinfo=timezone.utc))
+    from zoneinfo import ZoneInfo
+    from ..models import Shop
+    d=day or datetime.now(ZoneInfo(db.get(Shop,shop_id).timezone)).date();daily=daily_totals(db,shop_id,d);start,end=day_bounds(db,shop_id,d);profit=profit_data(db,shop_id,start,end)
     products=db.scalars(select(Product).where(Product.shop_id==shop_id,Product.inventory_enabled==True,Product.active==True)).all();stock_value=Z
     for p in products:
         stock=Decimal(db.scalar(select(func.coalesce(func.sum(InventoryMovement.quantity_delta),0)).where(InventoryMovement.product_id==p.id)));stock_value+=max(stock,Z)*(p.buy_price or Z)
