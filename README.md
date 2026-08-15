@@ -10,3 +10,6 @@ Android-first shop ledger with a React/Vite/TypeScript/Capacitor client and Fast
 4. `cd frontend && npm install && npm run dev`
 
 For Android, configure `VITE_API_URL` to an API reachable from the device, then run `npm run android:build`. The debug APK is below `frontend/android/app/build/outputs/apk/debug/`.
+
+## Maintenance
+- 2026-08-15: routine project maintenance check completed.
