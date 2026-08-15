@@ -27,3 +27,6 @@ The Android client is built through Capacitor using the frontend application.
 ## Project Structure
 - frontend/: React + Vite + TypeScript client
 - backend/: FastAPI application
+
+## Development Notes
+Run frontend and backend locally before testing Android builds.
