@@ -13,3 +13,7 @@ For Android, configure `VITE_API_URL` to an API reachable from the device, then 
 
 ## Maintenance
 - 2026-08-15: routine project maintenance check completed.
+
+## Project Structure
+- frontend/: React + Vite + TypeScript client
+- backend/: FastAPI application
