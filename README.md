@@ -20,3 +20,6 @@ For Android, configure `VITE_API_URL` to an API reachable from the device, then 
 
 ## Development Notes
 Run frontend and backend locally before testing Android builds.
+
+## Android
+The Android client is built through Capacitor using the frontend application.
