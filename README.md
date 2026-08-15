@@ -17,3 +17,6 @@ For Android, configure `VITE_API_URL` to an API reachable from the device, then 
 ## Project Structure
 - frontend/: React + Vite + TypeScript client
 - backend/: FastAPI application
+
+## Development Notes
+Run frontend and backend locally before testing Android builds.
